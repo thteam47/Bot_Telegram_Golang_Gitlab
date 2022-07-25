@@ -3,19 +3,17 @@ package main
 import (
 	"fmt"
 	"log"
-	"strconv"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/xanzy/go-gitlab"
 )
 
 func main() {
-	git, err := gitlab.NewClient("token-git")
+	git, err := gitlab.NewClient("glpat-awnzw4s9yU6L5RXsVXoV")
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	bot, err := tgbotapi.NewBotAPI("token-bot")
+	bot, err := tgbotapi.NewBotAPI("5204140121:AAFky6KMUqdAUhvWVUPBWoOghqH4cH8lW4c")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -29,18 +27,31 @@ func main() {
 
 func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int) {
 	for {
-		events, _, _ := git.Events.ListProjectVisibleEvents("project-id", nil)
+		project, _, _ := git.Projects.GetProject("38057156", nil)
+		events, _, _ := git.Events.ListProjectVisibleEvents("38057156", nil)
 		if events != nil {
 			if *lastId != events[0].ID {
 				*lastId = events[0].ID
 				if bot != nil {
-					data := strconv.Itoa(events[0].ID) + events[0].ActionName + events[0].TargetType
-					msg := tgbotapi.NewMessage("id chat", data)
+					data := fmt.Sprintf("*%s* [%s](%s)", events[0].AuthorUsername, events[0].ActionName, project.WebURL)
+					msg := tgbotapi.NewMessage(5172255611, data)
+					msg.ParseMode = "markdown"
 					if _, err := bot.Send(msg); err != nil {
+						fmt.Println(err)
 					}
-					time.Sleep(20 * time.Second)
 				}
-				fmt.Println(events[0])
+				fmt.Println(events[0].ActionName)
+				fmt.Println(events[0].Author.)
+				fmt.Println(events[0].AuthorID)
+				fmt.Println(events[0].AuthorUsername)
+				fmt.Println(events[0].Note)
+				fmt.Println(events[0].ProjectID)
+				fmt.Println(events[0].PushData)
+				fmt.Println(events[0].TargetID)
+				fmt.Println(events[0].TargetIID)
+				fmt.Println(events[0].TargetTitle)
+				fmt.Println(events[0].TargetType)
+				fmt.Println(events[0].Title)
 			}
 		}
 	}
