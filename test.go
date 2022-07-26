@@ -9,10 +9,10 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
-const projectId = ""
-const tokenBot = ""
+const projectId = "38057156"
+const tokenBot = "5204140121:AAFky6KMUqdAUhvWVUPBWoOghqH4cH8lW4c"
 const tokenGit = ""
-const chatId = 
+const chatId = 5172255611
 
 func main() {
 	git, err := gitlab.NewClient(tokenGit)
@@ -49,7 +49,8 @@ func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int, project *git
 			data := "Notification"
 			if *lastId != event.ID {
 				*lastId = event.ID
-				if strings.HasPrefix(event.ActionName, "pushed") {
+				fmt.Println(event)
+				if strings.HasPrefix(event.ActionName, "pushed to") {
 					branch, statusCode, err := git.Branches.GetBranch(projectId, event.PushData.Ref)
 					if err != nil {
 						log.Printf("git.Branches.GetBranch: %v", err)
@@ -68,7 +69,6 @@ func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int, project *git
 						log.Printf("Commit not found: %v", err)
 						return
 					}
-					fmt.Println(commit)
 					if branch != nil && commit != nil {
 						data = fmt.Sprintf("*%s* [%s](%s) to [%s/%s/%s](%s) \n *%s* [%s](%s) [%s](%s) ``` @%s \n Additions:%d, Deletions:%d, Total:%d```",
 							event.Author.Name, "pushed", branch.Commit.WebURL, event.Author.Username, project.Name, event.PushData.Ref, branch.WebURL,
@@ -76,8 +76,66 @@ func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int, project *git
 							"Commit", branch.Commit.WebURL, commit.ShortID,
 							commit.Stats.Additions, commit.Stats.Deletions, commit.Stats.Total)
 					}
+				} else if strings.HasPrefix(event.ActionName, "pushed new") {
+					branch, statusCode, err := git.Branches.GetBranch(projectId, event.PushData.Ref)
+					if err != nil {
+						log.Printf("git.Branches.GetBranch: %v", err)
+						return
+					}
+					if statusCode.StatusCode != 200 {
+						log.Printf("Branch not found: %v", err)
+						return
+					}
+					if branch != nil {
+						data = fmt.Sprintf("*%s* %s %s [%s/%s](%s)",
+							event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref, branch.WebURL)
+					}
+				} else if strings.HasPrefix(event.ActionName, "opened") {
+					if event.TargetType == "Issue" {
+						issue, statusCode, err := git.Issues.GetIssue(projectId, event.TargetIID)
+						if err != nil {
+							log.Printf("git.Issues.GetIssue: %v", err)
+							return
+						}
+						if statusCode.StatusCode != 200 {
+							log.Printf("Issue not found: %v", err)
+							return
+						}
+						if issue != nil {
+							data = fmt.Sprintf("*%s* %s [%s](%s) at [%s/%s](%s/%s): *%s*",
+								event.Author.Name, issue.State, *issue.IssueType, issue.WebURL, issue.Author.Username, project.Name, issue.Author.WebURL, project.Name, event.TargetTitle)
+						}
+					} else if event.TargetType == "MergeRequest" {
+						mergeRequest, statusCode, err := git.MergeRequests.GetMergeRequest(projectId, event.TargetIID, nil)
+						if err != nil {
+							log.Printf("git.MergeRequests.GetMergeRequest: %v", err)
+							return
+						}
+						if statusCode.StatusCode != 200 {
+							log.Printf("Merge Request not found: %v", err)
+							return
+						}
+						if mergeRequest != nil {
+							data = fmt.Sprintf("*%s* %s [%s](%s) at [/%s](%s/%s): *%s*",
+								event.Author.Name, mergeRequest.State, "merge request", mergeRequest.WebURL, project.Name, mergeRequest.Author.WebURL, project.Name, event.TargetTitle)
+						}
+					}
+				} else if strings.HasPrefix(event.ActionName, "commented") {
+					mergeRequest, statusCode, err := git.MergeRequests.GetMergeRequest(projectId, event.Note.NoteableIID, nil)
+					if err != nil {
+						log.Printf("git.MergeRequests.GetMergeRequest: %v", err)
+						return
+					}
+					if statusCode.StatusCode != 200 {
+						log.Printf("Merge Request not found: %v", err)
+						return
+					}
+					if mergeRequest != nil {
+						data = fmt.Sprintf("*%s* %s [%s](%s#note_%d): ``` %s ```",
+							event.Author.Name, event.ActionName, "merge request", mergeRequest.WebURL, event.TargetID, event.Note.Body)
+					}
 				} else {
-					data = fmt.Sprintf("*%s* %s", event.ActionName, event.PushData.Ref)
+					data = fmt.Sprintf("*%s* %s %d %s", event.Author.Name, event.ActionName, event.TargetID, event.TargetTitle)
 				}
 				if bot != nil {
 					msg := tgbotapi.NewMessage(chatId, data)
