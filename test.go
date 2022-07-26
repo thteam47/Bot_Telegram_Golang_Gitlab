@@ -77,18 +77,23 @@ func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int, project *git
 							commit.Stats.Additions, commit.Stats.Deletions, commit.Stats.Total)
 					}
 				} else if strings.HasPrefix(event.ActionName, "pushed new") {
-					branch, statusCode, err := git.Branches.GetBranch(projectId, event.PushData.Ref)
-					if err != nil {
-						log.Printf("git.Branches.GetBranch: %v", err)
-						return
-					}
-					if statusCode.StatusCode != 200 {
-						log.Printf("Branch not found: %v", err)
-						return
-					}
-					if branch != nil {
-						data = fmt.Sprintf("*%s* %s %s [%s/%s](%s)",
-							event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref, branch.WebURL)
+					if event.PushData.RefType == "branch" {
+						branch, statusCode, err := git.Branches.GetBranch(projectId, event.PushData.Ref)
+						if err != nil {
+							log.Printf("git.Branches.GetBranch: %v", err)
+							return
+						}
+						if statusCode.StatusCode != 200 {
+							log.Printf("Branch not found: %v", err)
+							return
+						}
+						if branch != nil {
+							data = fmt.Sprintf("*%s* %s %s [%s/%s](%s)",
+								event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref, branch.WebURL)
+						}
+					} else {
+						data = fmt.Sprintf("*%s* %s %s %s/%s",
+							event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref)
 					}
 				} else if strings.HasPrefix(event.ActionName, "opened") {
 					if event.TargetType == "Issue" {
@@ -119,20 +124,42 @@ func getData(bot *tgbotapi.BotAPI, git *gitlab.Client, lastId *int, project *git
 							data = fmt.Sprintf("*%s* %s [%s](%s) at [/%s](%s/%s): *%s*",
 								event.Author.Name, mergeRequest.State, "merge request", mergeRequest.WebURL, project.Name, mergeRequest.Author.WebURL, project.Name, event.TargetTitle)
 						}
+					} else {
+						data = fmt.Sprintf("*%s* %s %s %s/%s",
+							event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref)
 					}
 				} else if strings.HasPrefix(event.ActionName, "commented") {
-					mergeRequest, statusCode, err := git.MergeRequests.GetMergeRequest(projectId, event.Note.NoteableIID, nil)
-					if err != nil {
-						log.Printf("git.MergeRequests.GetMergeRequest: %v", err)
-						return
-					}
-					if statusCode.StatusCode != 200 {
-						log.Printf("Merge Request not found: %v", err)
-						return
-					}
-					if mergeRequest != nil {
-						data = fmt.Sprintf("*%s* %s [%s](%s#note_%d): ``` %s ```",
-							event.Author.Name, event.ActionName, "merge request", mergeRequest.WebURL, event.TargetID, event.Note.Body)
+					if event.Note.NoteableType == "MergeRequest" {
+						mergeRequest, statusCode, err := git.MergeRequests.GetMergeRequest(projectId, event.Note.NoteableIID, nil)
+						if err != nil {
+							log.Printf("git.MergeRequests.GetMergeRequest: %v", err)
+							return
+						}
+						if statusCode.StatusCode != 200 {
+							log.Printf("Merge Request not found: %v", err)
+							return
+						}
+						if mergeRequest != nil {
+							data = fmt.Sprintf("*%s* %s [%s](%s#note_%d): ``` %s ```",
+								event.Author.Name, event.ActionName, "merge request", mergeRequest.WebURL, event.TargetID, event.Note.Body)
+						}
+					} else if event.Note.NoteableType == "Issue" {
+						issue, statusCode, err := git.Issues.GetIssue(projectId, event.Note.NoteableIID)
+						if err != nil {
+							log.Printf("git.Issues.GetIssue: %v", err)
+							return
+						}
+						if statusCode.StatusCode != 200 {
+							log.Printf("Issue not found: %v", err)
+							return
+						}
+						if issue != nil {
+							data = fmt.Sprintf("*%s* %s [%s](%s#note_%d): ``` %s ```",
+								event.Author.Name, event.ActionName, "issue", issue.WebURL, event.TargetID, event.Note.Body)
+						}
+					} else {
+						data = fmt.Sprintf("*%s* %s %s %s/%s",
+							event.Author.Name, event.PushData.Action, event.PushData.RefType, project.Name, event.PushData.Ref)
 					}
 				} else {
 					data = fmt.Sprintf("*%s* %s %d %s", event.Author.Name, event.ActionName, event.TargetID, event.TargetTitle)
